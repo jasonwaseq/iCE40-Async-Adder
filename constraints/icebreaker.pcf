@@ -1,0 +1,16 @@
+# iCEBreaker (iCE40UP5K-SG48) pin constraints for UART adder
+# Port names must match Top.v: clock, reset, io_uart_tx, io_uart_rx, io_reset_n
+
+# 12 MHz clock
+set_io clock 35
+
+# Active-low reset (BTN_N on iCEBreaker)
+set_io io_reset_n 10
+
+# UART (onboard FTDI USB-UART)
+# FPGA RX = Pin 6 (receives from PC/FTDI TX), FPGA TX = Pin 9 (transmits to PC/FTDI RX)
+set_io io_uart_rx 6
+set_io io_uart_tx 9
+
+# Chisel implicit reset (active high) - unconstrained; use --pcf-allow-unconstrained
+# set_io reset <pin>

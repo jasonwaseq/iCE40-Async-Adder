@@ -1,0 +1,26 @@
+# sbt
+target/
+project/target/
+project/project/
+
+# Scala
+*.class
+*.jar
+*.log
+
+# Chisel/CIRCT output
+src/rtl/chisel-verilog/
+
+# Build artifacts
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
