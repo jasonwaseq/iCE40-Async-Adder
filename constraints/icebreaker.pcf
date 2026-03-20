@@ -12,5 +12,9 @@ set_io io_reset_n 10
 set_io io_uart_rx 6
 set_io io_uart_tx 9
 
+# Debug LEDs
+set_io io_led_g 37
+set_io io_led_r 11
+
 # Chisel implicit reset (active high) - unconstrained; use --pcf-allow-unconstrained
 # set_io reset <pin>

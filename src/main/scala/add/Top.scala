@@ -16,6 +16,8 @@ class Top(clockFreqHz: Int = 12000000, baudRate: Int = 115200) extends Module {
     val uart_tx = Output(Bool())
     val uart_rx = Input(Bool())
     val reset_n = Input(Bool())
+    val led_g   = Output(Bool())  // debug: toggles on each UART byte received
+    val led_r   = Output(Bool())  // debug: toggles on each completed addition (s_tx entered)
   })
 
   val sysReset = !io.reset_n
@@ -40,6 +42,12 @@ class Top(clockFreqHz: Int = 12000000, baudRate: Int = 115200) extends Module {
     val byte1 = Reg(UInt(8.W))
     val gotFirst = RegInit(false.B)
 
+    // Debug LEDs: toggle registers
+    val dbgRxToggle = RegInit(false.B)
+    val dbgTxToggle = RegInit(false.B)
+    io.led_g := dbgRxToggle
+    io.led_r := dbgTxToggle
+
     // UART defaults
     uartTx.io.valid := false.B
     uartTx.io.data  := add.io.Out.Data
@@ -56,6 +64,7 @@ class Top(clockFreqHz: Int = 12000000, baudRate: Int = 115200) extends Module {
       is(s_idle) {
         uartRx.io.ready := true.B
         when(uartRx.io.valid) {
+          dbgRxToggle := !dbgRxToggle  // toggle green LED on each byte received
           when(gotFirst) {
             byte1    := uartRx.io.data
             state    := s_add
@@ -86,6 +95,7 @@ class Top(clockFreqHz: Int = 12000000, baudRate: Int = 115200) extends Module {
       }
       is(s_tx) {
         // Transmit the sum via UART
+        dbgTxToggle := !dbgTxToggle  // toggle red LED when we reach TX state
         uartTx.io.valid := true.B
         when(uartTx.io.ready) {
           state := s_idle

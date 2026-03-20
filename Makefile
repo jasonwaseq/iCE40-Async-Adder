@@ -87,6 +87,23 @@ prog-echo: $(BUILD_DIR)/$(ECHO_TOP).bin
 test-echo:
 	python3 $(SCRIPTS_DIR)/uart_echo_test.py /dev/ttyUSB1
 
+# Wire echo (absolute minimal: RX pin wired to TX pin, no logic)
+.PHONY: build-wire prog-wire test-wire
+build-wire:
+	@mkdir -p $(BUILD_DIR)
+	yosys -q -p "read_verilog src/rtl/WireEcho.v; synth_ice40 -top WireEcho; write_json $(BUILD_DIR)/WireEcho.json"
+	nextpnr-ice40 --$(DEVICE) --package $(PACKAGE) \
+		--pcf-allow-unconstrained \
+		--json $(BUILD_DIR)/WireEcho.json \
+		--pcf $(PCF_FILE) \
+		--asc $(BUILD_DIR)/WireEcho.asc \
+		--freq $(FREQ)
+	icepack $(BUILD_DIR)/WireEcho.asc $(BUILD_DIR)/WireEcho.bin
+prog-wire: build-wire
+	iceprog $(BUILD_DIR)/WireEcho.bin
+test-wire: prog-wire
+	python3 $(SCRIPTS_DIR)/uart_echo_test.py /dev/ttyUSB1
+
 synth: $(BUILD_DIR)/$(TOP_MODULE).json
 place: $(BUILD_DIR)/$(TOP_MODULE).asc
 build: rtl $(BUILD_DIR)/$(TOP_MODULE).bin
