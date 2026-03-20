@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(v|scala|py|pcf|xdc|sdc|md|txt|sh\\)$\")"
+    ]
+  }
+}

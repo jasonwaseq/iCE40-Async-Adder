@@ -23,66 +23,37 @@ class Top(clockFreqHz: Int = 12000000, baudRate: Int = 115200) extends Module {
   withReset(sysReset) {
     val uartTx = Module(new UARTTx(divisor))
     val uartRx = Module(new UARTRx(divisor))
-    val add    = Module(new ADD)
 
     io.uart_tx   := uartTx.io.tx
     uartRx.io.rx := io.uart_rx
 
-    val s_idle :: s_rx0 :: s_rx1 :: s_do_add :: s_wait_out :: s_ack_out :: s_tx :: Nil = Enum(7)
+    // 2-byte adder bypass: receive A, B, send (A+B) mod 256
+    val s_idle :: s_tx :: Nil = Enum(2)
     val state = RegInit(s_idle)
     val byte0 = Reg(UInt(8.W))
     val byte1 = Reg(UInt(8.W))
-
-    add.io.In0.HS.Req := false.B
-    add.io.In1.HS.Req := false.B
-    add.io.In0.Data   := byte0
-    add.io.In1.Data   := byte1
-    add.io.Out.HS.Ack := false.B
+    val gotFirst = RegInit(false.B)
 
     uartTx.io.valid := false.B
-    uartTx.io.data  := add.io.Out.Data
+    uartTx.io.data  := (byte0 +& byte1)(7, 0)
     uartRx.io.ready := false.B
 
     switch(state) {
       is(s_idle) {
         uartRx.io.ready := true.B
         when(uartRx.io.valid) {
-          byte0  := uartRx.io.data
-          state  := s_rx0
+          when(gotFirst) {
+            byte1    := uartRx.io.data
+            state    := s_tx
+            gotFirst := false.B
+          }.otherwise {
+            byte0    := uartRx.io.data
+            gotFirst := true.B
+          }
         }
-      }
-      is(s_rx0) {
-        uartRx.io.ready := true.B
-        when(uartRx.io.valid) {
-          byte1  := uartRx.io.data
-          state  := s_rx1
-        }
-      }
-      is(s_rx1) {
-        add.io.In0.HS.Req := true.B
-        add.io.In1.HS.Req := true.B
-        state := s_do_add
-      }
-      is(s_do_add) {
-        add.io.In0.HS.Req := true.B
-        add.io.In1.HS.Req := true.B
-        when(add.io.Out.HS.Req) {
-          state := s_wait_out
-        }
-      }
-      is(s_wait_out) {
-        add.io.Out.HS.Ack := true.B
-        state := s_ack_out
-      }
-      is(s_ack_out) {
-        add.io.Out.HS.Ack := false.B
-        add.io.In0.HS.Req := false.B
-        add.io.In1.HS.Req := false.B
-        state := s_tx
       }
       is(s_tx) {
         uartTx.io.valid := true.B
-        uartTx.io.data  := add.io.Out.Data
         when(uartTx.io.ready) {
           state := s_idle
         }
