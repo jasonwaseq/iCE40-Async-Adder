@@ -8,11 +8,13 @@ The design has three layers:
 
 1. **UART TX/RX** ([UART.scala](src/main/scala/tool/UART.scala)) — serializer/deserializer at 115200 baud (divisor = clock/baud = 104). RX uses a 2-stage synchronizer and mid-bit sampling. TX shifts out start + 8 data + stop bits.
 
-2. **Top state machine** ([Top.scala](src/main/scala/add/Top.scala)) — a 2-state FSM (`s_idle` / `s_tx`) with a `gotFirst` flag:
-   - **s_idle**: RX ready is asserted. On the first received byte, store it in `byte0` and set `gotFirst`. On the second byte, store it in `byte1` and transition to `s_tx`.
-   - **s_tx**: Assert TX valid with `(byte0 + byte1) mod 256`. When TX accepts the byte, return to `s_idle`.
+2. **Async adder** ([ADD.scala](src/main/scala/add/ADD.scala), [ACG.scala](src/main/scala/tool/ACG.scala)) — handshake-based asynchronous adder using request/acknowledge signaling (2-phase style via ACG). The ACG module joins two input handshakes into one output: when both inputs assert Req, ACG acknowledges them, asserts Out.Req, waits for Out.Ack, then pulses `fire_o` to capture the sum.
 
-3. **Async adder modules** ([ADD.scala](src/main/scala/add/ADD.scala), [ACG.scala](src/main/scala/tool/ACG.scala)) — handshake-based asynchronous adder using request/acknowledge signaling (2-phase style via ACG). Currently bypassed in Top; the addition is done directly in Chisel combinational logic.
+3. **Top state machine** ([Top.scala](src/main/scala/add/Top.scala)) — a 4-state FSM (`s_idle` / `s_add` / `s_ack` / `s_tx`) with a `gotFirst` flag:
+   - **s_idle**: RX ready is asserted. On the first received byte, store it in `byte0` and set `gotFirst`. On the second byte, store it in `byte1` and transition to `s_add`.
+   - **s_add**: Assert Req on both ADD inputs with data. Wait for `Out.Req` from the ADD module (handshake join complete).
+   - **s_ack**: Acknowledge the ADD output (`Out.Ack = true`). Wait for `!Out.Req` — this signals that ACG has fired and `outDataReg` has captured the sum.
+   - **s_tx**: Transmit `add.io.Out.Data` (the sum) via UART TX. When TX accepts, return to `s_idle`.
 
 ### Pin mapping (iCEBreaker)
 
@@ -107,7 +109,9 @@ python3 scripts/uart_adder_test.py -d -v    # debug + verbose output
 
 ## Design notes
 
-The Top module uses a **2-state FSM with a `gotFirst` flag** rather than a 3+ state Enum. On iCE40, Chisel Enum(3) produces a 2-bit state register where value `3` (binary `11`) is unhandled — if the register ever reaches that value (e.g. due to unreliable power-on reset), the design locks up permanently. The 2-state Enum uses a 1-bit register with no undefined states, avoiding this trap. The `gotFirst` Bool flag tracks whether the first byte has been received while staying in `s_idle`.
+The Top module uses a **4-state FSM** (`Enum(4)` = 2-bit register, all 4 values used) to avoid iCE40 trap states. On iCE40, Chisel `Enum(N)` where N is not a power of 2 produces a register with unused bit patterns — if the register ever reaches an unhandled value (e.g. due to unreliable power-on reset), the design locks up permanently. `Enum(4)` uses a 2-bit register where all values (0–3) are handled. The `gotFirst` Bool flag tracks whether the first byte has been received while staying in `s_idle`, keeping the state count minimal.
+
+The addition goes through the full ADD/ACG request-acknowledge handshake (4 clock cycles at 12 MHz ≈ 333 ns), not a combinational bypass.
 
 ### Bugs fixed in UART modules
 
